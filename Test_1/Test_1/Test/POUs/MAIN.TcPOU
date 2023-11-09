@@ -4,13 +4,11 @@
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
 	Test : TON;
+	
 END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[Test( PT := T#5S)]]></ST>
     </Implementation>
-    <LineIds Name="MAIN">
-      <LineId Id="2" Count="0" />
-    </LineIds>
   </POU>
 </TcPlcObject>
