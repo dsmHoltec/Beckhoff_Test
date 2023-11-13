@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="CMMT_AS_EtherCAT" Id="{e4576538-0d53-4d2e-b92b-ea03f56f7f9d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CMMT_AS_EtherCAT
+VAR
+	MC_Power				: MC_Power;							// enable axis
+	MC_Reset				: MC_Reset;							// reset axis if error is active
+	Festo_MC_ReadAxisErr	: Festo_MC_ReadAxisError;			// read axis error
+	Festo_MC_Home			: Festo_MC_Home;					// start homing procedure 			
+	MC_MovRel				: MC_MoveRelative;					// move relative
+	
+	Axis					: AXIS_REF;							// axis reference structure	
+	Start					: BOOL;								// start statemachine
+	ReadAxisError			: BOOL;								// start reading axis error
+	Step					: UINT;								// statemachine
+	Counter					: DINT;								// counter how many times statemachine was finished successfully
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(*cyclic call of function blocks*)
+MC_Power(Axis:= Axis);
+MC_Reset(Axis:= Axis);
+Festo_MC_Home(Axis:= Axis);
+Festo_MC_ReadAxisErr(Axis:= Axis, Enable:=ReadAxisError);
+MC_MovRel(Axis:= Axis, Distance:= 25, Velocity:= 15, Acceleration:= 100, Deceleration:= 100, Jerk:= 300);
+
+// reset statemachine if start is FALSE
+IF NOT START THEN
+	Step	:= 0;
+END_IF
+
+(*Statemachine*)
+CASE Step OF
+	0: // init
+		MC_Power.Enable				:= FALSE;
+		MC_Reset.Execute			:= FALSE;
+		Festo_MC_Home.Execute		:= FALSE;
+		MC_MovRel.Execute			:= FALSE;
+		
+		IF Start THEN
+			Step					:= 1;
+		END_IF
+	
+	1: // enable
+		MC_Power.Enable				:= TRUE;
+		MC_Power.Enable_Positive	:= TRUE;
+		MC_Power.Enable_Negative	:= TRUE;
+
+		IF MC_Power.Status THEN
+			Step					:= 20;
+		ELSIF MC_Power.Error THEN
+			Step					:= 10;	
+		END_IF
+		
+	10: // reset
+		MC_Reset.Execute			:= TRUE;
+		
+		IF MC_Reset.Done THEN
+			MC_Reset.Execute		:= FALSE;
+			Step					:= 0;
+		END_IF
+	
+	20: // start homing
+		Festo_MC_Home.Execute				:= TRUE;
+
+		IF Festo_MC_Home.Done AND Axis.NcToPlc.ActPos > -1.5 AND Axis.NcToPlc.ActPos < 1.5 THEN
+			Festo_MC_Home.Execute	:= FALSE;	
+			Step					:= 30;
+		END_IF
+
+	30: // move rel no. 1
+		MC_MovRel.Execute			:= TRUE;
+		
+		IF MC_MovRel.Done THEN
+			MC_MovRel.Execute		:= FALSE;
+			Step					:= 40;
+		END_IF
+		
+	40: // move rel no. 2	
+		MC_MovRel.Execute			:= TRUE;
+		
+		IF MC_MovRel.Done THEN
+			MC_MovRel.Execute		:= FALSE;
+			Counter					:= Counter + 1;
+			Step					:= 20;
+		END_IF	
+END_CASE]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
